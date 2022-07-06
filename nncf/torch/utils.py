@@ -10,10 +10,10 @@
  See the License for the specific language governing permissions and
  limitations under the License.
 """
+import warnings
 from collections import OrderedDict
 from typing import Dict, Any, List
 
-import warnings
 import numpy as np
 import random
 import torch
@@ -51,8 +51,8 @@ def get_all_modules_by_type(model, module_types=None, current_scope=None,
     if isinstance(module_types, str):
         module_types = [module_types]
     found = OrderedDict()
-    from nncf.torch.dynamic_graph.scope import Scope
-    from nncf.torch.dynamic_graph.scope import ScopeElement
+    from nncf.torch.dynamic_graph.scope import Scope #pylint: disable=cyclic-import
+    from nncf.torch.dynamic_graph.scope import ScopeElement #pylint: disable=cyclic-import
     if current_scope is None:
         current_scope = Scope()
         current_scope.push(ScopeElement(model.__class__.__name__))
@@ -253,7 +253,7 @@ def compute_FLOPs_hook(module, input_, output, dict_to_save, module_node_name: N
 
 
 def add_domain(name_operator: str) -> str:
-    from nncf.torch.compression_method_api import DOMAIN_CUSTOM_OPS_NAME
+    from nncf.torch.compression_method_api import DOMAIN_CUSTOM_OPS_NAME #pylint: disable=cyclic-import
     return DOMAIN_CUSTOM_OPS_NAME + "::" + name_operator
 
 
@@ -299,6 +299,26 @@ def default_distributed_unwrapper(model: nn.Module):
         return model.module
     return model
 
+def rename_legacy_names_in_state_dict(state_dict_to_load: Dict[str, Any],
+                                      legacy_names: List[str],
+                                      legacy_name: str,
+                                      new_name: str):
+
+    for name in legacy_names:
+        tensor = state_dict_to_load.pop(name)
+        new_key = name.replace(legacy_name, new_name) if not new_name in name else name
+        state_dict_to_load[new_key] = tensor
+
+    if legacy_names:
+        warning_deprecated('Legacy Batch Norm layer names was detected in checkpoint model state dict.'
+                           ' All occurrences of `{}` in nodes names was replaced by `{}`'.format(legacy_name, new_name))
+
+LEGACY_VS_NEW_BN_MAP = {
+    'BatchNorm1d': 'NNCFBatchNorm1d',
+    'BatchNorm2d': 'NNCFBatchNorm2d',
+    'BatchNorm3d': 'NNCFBatchNorm3d',
+    'NNCFBatchNorm': 'NNCFBatchNorm2d',
+}
 
 def maybe_convert_legacy_names_in_model_state(state_dict_to_load: Dict[str, Any]) -> None:
     """
@@ -306,16 +326,25 @@ def maybe_convert_legacy_names_in_model_state(state_dict_to_load: Dict[str, Any]
 
     :param state_dict_to_load: State dict to convert.
     """
-    legacy_bn_names = [name for name in state_dict_to_load if 'BatchNorm2d' in name]
-    for name in legacy_bn_names:
-        tensor = state_dict_to_load.pop(name)
-        new_name = name.replace('BatchNorm2d', 'NNCFBatchNorm')
-        state_dict_to_load[new_name] = tensor
 
-    if legacy_bn_names:
-        warnings.warn('Legacy Batch Norm layer names was detected in checkpoint model state dict.'
-                      ' All occurrences of `BatchNorm2d` in nodes names was replaced by `NNCFBatchNorm`',
-                      category=DeprecationWarning)
+    legacy_names = {
+        'BatchNorm1d': [],
+        'BatchNorm2d': [],
+        'BatchNorm3d': [],
+        'NNCFBatchNorm': [],
+    }
+    for name in state_dict_to_load:
+        if 'BatchNorm2d' in name:
+            legacy_names['BatchNorm2d'].append(name)
+        if 'BatchNorm1d' in name:
+            legacy_names['BatchNorm1d'].append(name)
+        if 'BatchNorm3d' in name:
+            legacy_names['BatchNorm3d'].append(name)
+        if 'NNCFBatchNorm' in name:
+            legacy_names['NNCFBatchNorm'].append(name)
+
+    for old_name, new_name in LEGACY_VS_NEW_BN_MAP.items():
+        rename_legacy_names_in_state_dict(state_dict_to_load, legacy_names[old_name], old_name, new_name)
 
 
 def maybe_convert_legacy_names_in_compress_state(compression_state: Dict[str, Any]) -> None:
@@ -331,18 +360,31 @@ def maybe_convert_legacy_names_in_compress_state(compression_state: Dict[str, An
     if not controller_state or 'quantization' not in controller_state:
         return
 
-    qips = controller_state['quantization']['quantizer_setup']['quantization_points']
-    legacy_bn_names = False
-    for point in qips.values():
-        name = point['qip']['target_node_name']
-        if 'BatchNorm2d' in name:
-            legacy_bn_names = True
-            point['qip']['target_node_name'] = name.replace('BatchNorm2d', 'NNCFBatchNorm')
+    from nncf.torch.quantization.algo import QUANTIZER_BUILDER_STATE_VERSION_SAVE_NAME #pylint: disable=cyclic-import
+    if not controller_state['quantization'].get(QUANTIZER_BUILDER_STATE_VERSION_SAVE_NAME):
+        qips = controller_state['quantization']['quantizer_setup']['quantization_points']
 
-    if legacy_bn_names:
-        warnings.warn('Legacy Batch Norm layer names was detected in quantization setup target point names.'
-                      ' All occurrences of `BatchNorm2d` in nodes names was replaced by `NNCFBatchNorm`',
-                      category=DeprecationWarning)
+        detected_legacy_names = {
+            'BatchNorm1d': False,
+            'BatchNorm2d': False,
+            'BatchNorm3d': False,
+            'NNCFBatchNorm': False,
+        }
+
+        for point in qips.values():
+            name = point['qip']['target_node_name']
+            for old_name, new_name in LEGACY_VS_NEW_BN_MAP.items():
+                if old_name in name and not new_name in name:
+                    detected_legacy_names[old_name] = True
+                    point['qip']['target_node_name'] = name.replace(old_name, new_name)
+                    break
+
+        for old_name, was_detected in detected_legacy_names.items():
+            if was_detected:
+                new_name = LEGACY_VS_NEW_BN_MAP[old_name]
+                warning_deprecated('Legacy Batch Norm layer names was detected in quantization setup target'
+                                   ' point names. All occurrences of `{}` in nodes names was replaced by'
+                                   ' `{}`'.format(old_name, new_name))
 
 
 def get_model_device(model: torch.nn.Module) -> torch.device:
@@ -352,3 +394,14 @@ def get_model_device(model: torch.nn.Module) -> torch.device:
         # The model had no parameters at all, doesn't matter which device to choose
         device = torch.device('cpu')
     return device
+
+def warning_deprecated(msg):
+    warnings.warn(msg, DeprecationWarning)
+
+def get_model_dtype(model: torch.nn.Module) -> torch.dtype:
+    try:
+        dtype = next(model.parameters()).dtype
+    except StopIteration:
+        # The model had no parameters at all, assume FP32
+        dtype = torch.float32
+    return dtype

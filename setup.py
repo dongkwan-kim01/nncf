@@ -79,7 +79,9 @@ INSTALL_REQUIRES = ["ninja>=1.10.0.post2",
                     "scipy>=1.3.2, <1.8; python_version>='3.7'",
                     "matplotlib~=3.3.4; python_version<'3.7'",
                     "matplotlib>=3.3.4; python_version>='3.7'",
-                    "networkx>=2.5",
+                    "networkx>=2.5, <2.8.1rc1",
+                    "pillow~=8.4.0; python_version<'3.7'",
+                    "pillow>=9.0.0; python_version>='3.7'",
 
                     # The recent pyparsing major version update seems to break
                     # integration with networkx - the graphs parsed from current .dot
@@ -87,7 +89,7 @@ INSTALL_REQUIRES = ["ninja>=1.10.0.post2",
                     # Using 2.x versions of pyparsing seems to fix the issue.
                     # Ticket: 69520
                     "pyparsing<3.0",
-
+                    "pymoo==0.5.0",
                     "jsonschema==3.2.0",
                     "pydot>=1.4.1",
                     "jstyleson>=0.0.2",
@@ -116,25 +118,45 @@ _extra_deps = [
 extra_deps = {b: a for a, b in (re.findall(r"^(([^~!=<>]+)(?:[~!=<>].*)?$)", x)[0] for x in _extra_deps)}
 
 EXTRAS_REQUIRE = {
-    "tests": [
-        "pytest"],
+    "tests": ["pytest"],
     "docs": [],
     "tf": [
-        extra_deps["tensorflow"]],
+        "tensorflow~=2.5.0",
+        "numpy~=1.19.2",
+    ],
     "torch": [
-        extra_deps["torch"]],
-    "all": [
-        extra_deps["tensorflow"],
-        extra_deps["torch"]],
+        "torch>=1.5.0, <=1.9.1, !=1.8.0",
+        "numpy~=1.19.2",
+    ],
+    "onnx": [
+        "torch==1.9.1",
+        "torchvision==0.10.1",
+        "onnx==1.11.0",
+        "skl2onnx==1.9.3",
+        "protobuf==3.20.1",
+        "onnxruntime-openvino==1.11.0",
+    ],
 }
+
+EXTRAS_REQUIRE["all"] = [
+    EXTRAS_REQUIRE["tf"],
+    EXTRAS_REQUIRE["torch"]
+]
 
 if "--torch" in sys.argv:
     INSTALL_REQUIRES.extend(EXTRAS_REQUIRE["torch"])
     sys.argv.remove("--torch")
 
 if "--tf" in sys.argv:
+    # See also: https://github.com/tensorflow/tensorflow/issues/56077
+    # This is a temporary patch, that limites the protobuf version from above
+    INSTALL_REQUIRES.extend(["protobuf>=3.9.2,<3.20"])
     INSTALL_REQUIRES.extend(EXTRAS_REQUIRE["tf"])
     sys.argv.remove("--tf")
+
+if "--onnx" in sys.argv:
+    INSTALL_REQUIRES.extend(EXTRAS_REQUIRE["onnx"])
+    sys.argv.remove("--onnx")
 
 if "--all" in sys.argv:
     INSTALL_REQUIRES.extend(EXTRAS_REQUIRE["all"])
@@ -161,7 +183,7 @@ setup(
     extras_require=EXTRAS_REQUIRE,
     keywords=["compression", "quantization", "sparsity", "mixed-precision-training",
               "quantization-aware-training", "hawq", "classification",
-              "pruning", "object-detection", "semantic-segmentation", "nlp",
+              "pruning", "object-detection", "semantic-segmentation", "nas", "nlp",
               "bert", "transformers", "mmdetection"],
     include_package_data=True
 )

@@ -20,7 +20,8 @@ disable = arguments-differ,
           attribute-defined-outside-init,
           import-outside-toplevel,
           duplicate-code,
-          consider-using-f-string
+          consider-using-f-string,
+          logging-fstring-interpolation
 
 max-line-length = 120
 ignore-docstrings = yes
@@ -39,3 +40,8 @@ good-names = logger,fn
 max-statements=60
 max-branches=13
 max-parents=9
+
+[TYPECHECK]
+# List of members which are set dynamically and missed by pylint inference
+# system, and so shouldn't trigger E0201 or E1101 when accessed.
+generated-members=onnx.*

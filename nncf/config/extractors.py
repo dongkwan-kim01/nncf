@@ -15,6 +15,8 @@ from typing import Dict
 from typing import List
 from typing import Optional
 
+from typing import Any
+
 from nncf.common.quantization.initialization.range import PerLayerRangeInitConfig
 from nncf.common.quantization.initialization.range import RangeInitConfig
 from nncf.common.utils.logger import logger
@@ -51,7 +53,7 @@ def extract_algo_specific_config(config: NNCFConfig, algo_name_to_match: str) ->
         assert isinstance(compression_section, dict)
         algo_list = [compression_section]
 
-    from nncf.common.compression import NO_COMPRESSION_ALGORITHM_NAME
+    from nncf.common.compression import NO_COMPRESSION_ALGORITHM_NAME #pylint: disable=cyclic-import
     if algo_name_to_match == NO_COMPRESSION_ALGORITHM_NAME:
         if len(algo_list) > 0:
             raise RuntimeError(f'No algorithm configuration should be specified '
@@ -142,25 +144,27 @@ def extract_bn_adaptation_init_params(config: NNCFConfig, algo_name: str) -> Opt
     """
     algo_config = extract_algo_specific_config(config, algo_name)
     params = algo_config.get('initializer', {}).get('batchnorm_adaptation', {})
+    return get_bn_adapt_algo_kwargs(config, params)
+
+
+def get_bn_adapt_algo_kwargs(nncf_config: NNCFConfig, params: Dict[str, Any]) -> Dict[str, Any]:
     num_bn_adaptation_samples = params.get('num_bn_adaptation_samples', 2000)
 
     if num_bn_adaptation_samples == 0:
         return None
 
     try:
-        args = config.get_extra_struct(BNAdaptationInitArgs)
+        args = nncf_config.get_extra_struct(BNAdaptationInitArgs)
     except KeyError:
         raise RuntimeError(
             'Unable to create the batch-norm statistics adaptation algorithm '
             'because the data loader is not provided as an extra struct. Refer to the '
             '`NNCFConfig.register_extra_structs` method and the `BNAdaptationInitArgs` class.') from None
-
     params = {
         'num_bn_adaptation_samples': num_bn_adaptation_samples,
         'data_loader': args.data_loader,
         'device': args.device
     }
-
     return params
 
 
@@ -177,7 +181,7 @@ def extract_accuracy_aware_training_params(config: NNCFConfig) -> Dict[str, obje
         SPARSITY = ['rb_sparsity', 'magnitude_sparsity', 'const_sparsity']
 
     def validate_accuracy_aware_schema(config: NNCFConfig, params: Dict[str, object]):
-        from nncf.common.accuracy_aware_training import AccuracyAwareTrainingMode
+        from nncf.common.accuracy_aware_training import AccuracyAwareTrainingMode #pylint: disable=cyclic-import
         if params["mode"] == AccuracyAwareTrainingMode.EARLY_EXIT:
             return
         if params["mode"] == AccuracyAwareTrainingMode.ADAPTIVE_COMPRESSION_LEVEL:
