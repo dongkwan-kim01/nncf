@@ -25,7 +25,8 @@ if not tensorflow_version.startswith(BKC_TF_VERSION[:-2]):
          bkc=BKC_TF_VERSION,
          curr=tensorflow.__version__
     ))
-elif not ('2.4' <= tensorflow_version[:3] <= '2.8.0'):
+    
+if not ('2.4' <= tensorflow_version[:3] <= '2.8.0'):
    raise RuntimeError(
         'NNCF only supports 2.4.0 <= tensorflow <= 2.8.0, while current tensorflow version is {curr}'.format(
         curr=tensorflow.__version__
