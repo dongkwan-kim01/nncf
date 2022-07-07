@@ -13,15 +13,8 @@
 
 import tensorflow as tf
 import tensorflow_hub as hub
-from packaging import version
 
-if version.parse(tf.__version__) < version.parse('2.6'):
-    from tensorflow.python.keras.applications import imagenet_utils
-    from tensorflow.python.keras.layers import Rescaling
-else:
-    from keras.applications import imagenet_utils
-    from tensorflow.keras.layers import Rescaling
-
+from nncf.tensorflow.tf_internals import imagenet_utils, Rescaling
 
 def mobilenet_v2_100_224(input_shape=None,
                          trainable=True,
