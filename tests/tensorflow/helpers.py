@@ -12,7 +12,6 @@
 """
 from typing import Union
 
-from packaging import version
 import numbers
 import numpy as np
 import tensorflow as tf
@@ -21,18 +20,14 @@ from tensorflow.python.ops.init_ops import Constant
 
 from nncf import NNCFConfig
 from nncf.tensorflow.helpers.model_creation import create_compressed_model
+from nncf.tensorflow.tf_internals import imagenet_utils
 from tests.common.helpers import BaseTensorListComparator
 
 from examples.tensorflow.common.object_detection.datasets.builder import COCODatasetBuilder
 from examples.tensorflow.classification.datasets.builder import DatasetBuilder
 
-if version.parse(tf.__version__) < version.parse('2.6'):
-    from tensorflow.python.keras.applications import imagenet_utils
-else:
-    from keras.applications import imagenet_utils
 
 TensorType = Union[tf.Tensor, tf.Variable, np.ndarray, numbers.Number]
-
 
 def get_conv_init_value(shape, value):
     mask = np.eye(shape[0], shape[1])

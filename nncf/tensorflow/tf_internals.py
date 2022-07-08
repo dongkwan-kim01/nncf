@@ -20,6 +20,10 @@ from tensorflow.python.eager import context as eager_context
 if version.parse(tensorflow_version) < version.parse('2.6'):
     from tensorflow.python.keras import engine as keras_engine
     from tensorflow.python.keras.utils.control_flow_util import smart_cond
+    from tensorflow.python.keras.applications import imagenet_utils
+    from tensorflow.python.keras.layers import Rescaling
 else:
     from keras import engine as keras_engine
     from keras.utils.control_flow_util import smart_cond
+    from keras.applications import imagenet_utils
+    from tensorflow.keras.layers import Rescaling
